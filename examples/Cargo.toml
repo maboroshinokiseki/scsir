@@ -1,0 +1,29 @@
+[package]
+name = "examples"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+scsir = { path = "../scsir" }
+
+[[example]]
+name = "mode_sense"
+path = "mode_sense.rs"
+
+[[example]]
+name = "read_bytes"
+path = "read_bytes.rs"
+
+[[example]]
+name = "read_lbas"
+path = "read_lbas.rs"
+
+[[example]]
+name = "unmap"
+path = "unmap.rs"
+
+[[example]]
+name = "write_lbas"
+path = "write_lbas.rs"
