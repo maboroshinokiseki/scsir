@@ -3,6 +3,7 @@ use std::ffi::c_uint;
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Debug)]
     pub struct AccessFlags: c_uint {
         /// Indirect io
         const DEFAULT           = 0b0000;

@@ -3,6 +3,7 @@ use std::ffi::c_uint;
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Debug)]
     pub struct AuxiliaryInfo: c_uint {
         const OK_MASK           = 0x01;
         const OK                = 0x00;

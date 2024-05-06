@@ -4,7 +4,7 @@ use super::{DriverStatus, HostStatus};
 
 pub trait ResultDataExt {
     fn host_status(&self) -> &HostStatus;
-    fn driver_status(&self) -> DriverStatus;
+    fn driver_status(&self) -> &DriverStatus;
 }
 
 impl<'a, D> ResultDataExt for ResultData<'a, D> {
@@ -12,7 +12,7 @@ impl<'a, D> ResultDataExt for ResultData<'a, D> {
         &self.host_status
     }
 
-    fn driver_status(&self) -> DriverStatus {
-        self.driver_status
+    fn driver_status(&self) -> &DriverStatus {
+        &self.driver_status
     }
 }
