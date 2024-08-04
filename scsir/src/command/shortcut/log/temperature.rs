@@ -7,7 +7,7 @@ use super::{GeneralParameter, LogParameter, ParameterHeader};
 pub const TEMPERATURE_PAGE_CODE: u8 = 0x0D;
 pub const TEMPERATURE_SUBPAGE_CODE: u8 = 0x00;
 
-pub enum PowerConditionTransitionsParameter {
+pub enum TemperatureParameter {
     Temperature(Temperature),
     ReferenceTemperature(ReferenceTemperature),
     Other(GeneralParameter),
@@ -29,7 +29,7 @@ pub struct ReferenceTemperature {
     pub reference_temperature: B8,
 }
 
-impl LogParameter for PowerConditionTransitionsParameter {
+impl LogParameter for TemperatureParameter {
     fn new() -> Self {
         Self::Other(GeneralParameter::new())
     }
@@ -40,20 +40,19 @@ impl LogParameter for PowerConditionTransitionsParameter {
         let result = match header.parameter_code() {
             0x0000 => {
                 let (array, left) = get_array(bytes);
-                let parameter =
-                    PowerConditionTransitionsParameter::Temperature(Temperature::from_bytes(array));
+                let parameter = TemperatureParameter::Temperature(Temperature::from_bytes(array));
                 (parameter, left)
             }
             0x0001 => {
                 let (array, left) = get_array(bytes);
-                let parameter = PowerConditionTransitionsParameter::ReferenceTemperature(
+                let parameter = TemperatureParameter::ReferenceTemperature(
                     ReferenceTemperature::from_bytes(array),
                 );
                 (parameter, left)
             }
             _ => {
                 let (parameter, left) = GeneralParameter::from_bytes(bytes);
-                (PowerConditionTransitionsParameter::Other(parameter), left)
+                (TemperatureParameter::Other(parameter), left)
             }
         };
 
@@ -62,9 +61,9 @@ impl LogParameter for PowerConditionTransitionsParameter {
 
     fn to_bytes(&self) -> Vec<u8> {
         match self {
-            PowerConditionTransitionsParameter::Temperature(p) => p.bytes.to_vec(),
-            PowerConditionTransitionsParameter::ReferenceTemperature(p) => p.bytes.to_vec(),
-            PowerConditionTransitionsParameter::Other(p) => p.to_bytes(),
+            TemperatureParameter::Temperature(p) => p.bytes.to_vec(),
+            TemperatureParameter::ReferenceTemperature(p) => p.bytes.to_vec(),
+            TemperatureParameter::Other(p) => p.to_bytes(),
         }
     }
 }
