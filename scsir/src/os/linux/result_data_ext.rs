@@ -2,6 +2,7 @@ use crate::ResultData;
 
 use super::{DriverStatus, HostStatus};
 
+#[allow(dead_code)]
 pub trait ResultDataExt {
     fn host_status(&self) -> &HostStatus;
     fn driver_status(&self) -> &DriverStatus;

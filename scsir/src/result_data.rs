@@ -19,6 +19,7 @@ pub struct ResultData<'a, D> {
     pub(crate) driver_status: DriverStatus,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub enum Status {
     Good,
