@@ -5,6 +5,7 @@ use modular_bitfield_msb::prelude::*;
 use crate::{
     command::{get_array, inquiry::InquiryCommand},
     data_wrapper::FlexibleStruct,
+    shortcut::inquiry::ProtocolIdentifier,
 };
 
 #[derive(Debug)]
@@ -18,18 +19,6 @@ pub struct IdentificationDescriptor {
     pub association: Association,
     pub identifier_type: u8,
     pub identifier: Identifier,
-}
-
-#[derive(Debug)]
-pub enum ProtocolIdentifier {
-    None,
-    FibreChannel,
-    Ssa,
-    IEEE1394,
-    RemoteDirectMemoryAccess,
-    InternetScsi,
-    SasSerialScsiProtocol,
-    Other(u8),
 }
 
 #[derive(Debug)]
