@@ -1,3 +1,4 @@
+pub mod ata;
 pub mod background_control;
 pub mod format_unit;
 pub mod get_lba_status;
