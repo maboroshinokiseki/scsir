@@ -3,7 +3,7 @@ use std::ffi::c_ushort;
 use bitflags::bitflags;
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct DriverStatus: c_ushort {
         const OK            = 0x00;
         const BUSY          = 0x01;
