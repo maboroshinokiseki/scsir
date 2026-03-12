@@ -12,6 +12,7 @@ use modular_bitfield_msb::prelude::*;
 
 pub mod identify;
 pub mod raw;
+pub mod security;
 pub mod smart;
 
 #[derive(Clone, Debug)]
