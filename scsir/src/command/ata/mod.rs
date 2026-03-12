@@ -10,6 +10,7 @@ use crate::{
 };
 use modular_bitfield_msb::prelude::*;
 
+pub mod identify;
 pub mod raw;
 pub mod smart;
 
@@ -18,6 +19,15 @@ pub struct SatResultData<T> {
     pub data: T,
     pub sense: SenseData,
 }
+impl<T> SatResultData<T> {
+    pub fn map<O>(self, map_fn: impl FnOnce(T) -> O) -> SatResultData<O> {
+        SatResultData {
+            data: map_fn(self.data),
+            sense: self.sense,
+        }
+    }
+}
+
 pub type SatResult<T> = crate::Result<SatResultData<T>>;
 
 /// Determines the data flow direction between SAT layer and ATA device.
