@@ -1,6 +1,8 @@
-use crate::command::ata::{raw::RawSatCommand, AtaProtocol, SatResult, ScsiSat, ToDevice};
+use crate::command::ata::{raw::RawSatCommand, AtaProtocol, NoData, SatResult, ScsiSat, ToDevice};
 
 const OPCODE_SECURITY_SET_PASSWORD: u8 = 0xF1;
+const OPCODE_SECURITY_ERASE_PREPARE: u8 = 0xF3;
+const OPCODE_SECURITY_ERASE_UNIT: u8 = 0xF4;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecurityPassword {
@@ -40,6 +42,35 @@ pub enum SecurityMode {
     /// unlock capability.
     Maximum,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EraseMode {
+    /// Performs the standard ATA *Security Erase Unit* operation.
+    ///
+    /// This mode overwrites all user‑accessible sectors with a
+    /// vendor‑defined pattern (often zeros, but not guaranteed).
+    /// It clears normal user data and typically completes faster
+    /// than the enhanced erase.
+    ///
+    /// While it meets the baseline ATA secure‑erase requirement,
+    /// it may not fully sanitize data that resides in hidden areas
+    /// such as reallocated sectors or spare blocks.
+    Normal,
+
+    /// Performs the *Enhanced Security Erase Unit* operation.
+    ///
+    /// This mode uses a stronger, vendor‑specific sanitization
+    /// algorithm. Drives may overwrite the media with multiple
+    /// patterns or use firmware‑level routines designed to make
+    /// recovery significantly more difficult.
+    ///
+    /// Enhanced erase usually takes longer but provides a higher
+    /// assurance of data destruction, including areas that the
+    /// normal erase may not fully cover.
+    Enhanced,
+}
+
+// ##################################################################################
 
 #[derive(Clone, Debug)]
 pub struct SecuritySetPasswordSatCommand<'a> {
@@ -91,11 +122,93 @@ impl<'a> SecuritySetPasswordSatCommand<'a> {
     }
 }
 
-// ######################################################################
+// ##################################################################################
+
+#[derive(Clone, Debug)]
+pub struct SecurityErasePrepareSatCommand<'a> {
+    raw: RawSatCommand<'a, NoData>,
+}
+
+impl<'a> SecurityErasePrepareSatCommand<'a> {
+    fn new(sat: &'a ScsiSat<'a>) -> Self {
+        let mut raw = sat.raw_nodata();
+        raw.command(AtaProtocol::NonData, OPCODE_SECURITY_ERASE_PREPARE)
+            .ck_cond(true);
+        Self { raw }
+    }
+
+    // ######################################################################
+
+    pub fn issue_12(&mut self) -> SatResult<()> {
+        self.raw.issue_12()
+    }
+
+    pub fn issue_16(&mut self) -> SatResult<()> {
+        self.raw.issue_16()
+    }
+}
+
+// ##################################################################################
+
+#[derive(Clone, Debug)]
+pub struct SecurityEraseUnitSatCommand<'a> {
+    raw: RawSatCommand<'a, ToDevice>,
+    data: Vec<u8>,
+}
+
+impl<'a> SecurityEraseUnitSatCommand<'a> {
+    fn new(sat: &'a ScsiSat<'a>) -> Self {
+        let mut raw = sat.raw_write();
+        raw.command(AtaProtocol::PioDataOut, OPCODE_SECURITY_ERASE_UNIT);
+        Self {
+            raw,
+            data: vec![0u8; 512],
+        }
+    }
+
+    pub fn mode(&mut self, mode: EraseMode) -> &mut Self {
+        let bit = match mode {
+            EraseMode::Normal => 0b00,
+            EraseMode::Enhanced => 0b10,
+        };
+        self.data[0] = (self.data[0] & !0b10) | bit;
+        self
+    }
+
+    pub fn password(&mut self, which: SecurityPassword, password: &[u8]) -> &mut Self {
+        let bit = match which {
+            SecurityPassword::User => 0b0,
+            SecurityPassword::Master => 0b1,
+        };
+        self.data[0] = (self.data[0] & !0b1) | bit;
+        self.data[2..2 + password.len()].copy_from_slice(password);
+        self
+    }
+
+    // ######################################################################
+
+    pub fn issue_12(&mut self) -> SatResult<()> {
+        self.raw.parameter(&self.data).issue_12()
+    }
+
+    pub fn issue_16(&mut self) -> SatResult<()> {
+        self.raw.parameter(&self.data).issue_16()
+    }
+}
+
+// ##################################################################################
 
 impl ScsiSat<'_> {
     /// Command: SECURITY SET PASWORD (0xF1)
     pub fn security_set_password(&self) -> SecuritySetPasswordSatCommand<'_> {
         SecuritySetPasswordSatCommand::new(self)
+    }
+    /// Command: SECURITY ERASE PREPARE (0xF3)
+    pub fn security_erase_prepare(&self) -> SecurityErasePrepareSatCommand<'_> {
+        SecurityErasePrepareSatCommand::new(self)
+    }
+    /// Command: SECURITY ERASE UNIT (0xF4)
+    pub fn security_erase_unit(&self) -> SecurityEraseUnitSatCommand<'_> {
+        SecurityEraseUnitSatCommand::new(self)
     }
 }
