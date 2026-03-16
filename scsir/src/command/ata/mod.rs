@@ -10,6 +10,7 @@ use crate::{
 };
 use modular_bitfield_msb::prelude::*;
 
+pub mod flush_cache;
 pub mod identify;
 pub mod raw;
 pub mod security;
