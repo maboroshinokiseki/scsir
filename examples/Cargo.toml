@@ -9,6 +9,10 @@ edition = "2021"
 scsir = { path = "../scsir" }
 
 [[example]]
+name = "ata_security_erase"
+path = "ata_security_erase.rs"
+
+[[example]]
 name = "mode_sense"
 path = "mode_sense.rs"
 
