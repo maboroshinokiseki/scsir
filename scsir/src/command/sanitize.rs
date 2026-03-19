@@ -63,6 +63,7 @@ impl<'a> SanitizeCommand<'a> {
     }
 
     pub fn service_action(&mut self, value: ServiceAction) -> &mut Self {
+        self.sanitize_service_action = value;
         self.command_buffer.set_service_action(value as u8);
         self
     }
@@ -243,4 +244,5 @@ mod tests {
             concat!("Size of: ", stringify!(OverwriteParameterListHeader))
         );
     }
+
 }

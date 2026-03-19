@@ -57,6 +57,7 @@ impl<'a> UnmapCommand<'a> {
 
     pub fn issue(&mut self) -> crate::Result<()> {
         bitfield_bound_check!(self.group_number, 5, "group number")?;
+        self.command_buffer.set_group_number(self.group_number);
 
         let temp = ThisCommand {
             command_buffer: self.command_buffer,
@@ -247,4 +248,5 @@ mod tests {
             concat!("UnmapBlockDescriptor 2 comparation")
         );
     }
+
 }
