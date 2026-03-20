@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct PersistentReserveInCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     service_action: ServiceAction,
     command_buffer: CommandBuffer,
 }
@@ -85,6 +86,7 @@ impl<'a> PersistentReserveInCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             service_action: ServiceAction::ReadKeys,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
         }
@@ -106,6 +108,11 @@ impl<'a> PersistentReserveInCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<CommandResult> {
         bitfield_bound_check!(u8::from(self.service_action), 5, "service action")?;
         self.command_buffer
@@ -114,6 +121,7 @@ impl<'a> PersistentReserveInCommand<'a> {
         let temp = ThisCommand {
             command_buffer: self.command_buffer,
             service_action: self.service_action,
+            timeout: self.timeout,
         };
         self.interface.issue(&temp)
     }
@@ -133,7 +141,6 @@ impl ReadKeysData {
         let (array, bytes) = get_array(bytes);
         let additional_length = u32::from_be_bytes(array);
         let required_length = additional_length.saturating_add(8);
-
         let mut reservation_keys = vec![];
 
         for chunk in bytes.chunks(size_of::<u64>()) {
@@ -190,7 +197,6 @@ impl ReadFullStatusData {
     fn from_bytes(bytes: &[u8]) -> Self {
         let (array, mut bytes) = get_array(bytes);
         let header = ReadFullsstatusHeaderBitfield::from_bytes(array);
-
         let mut descriptors = vec![];
 
         while !bytes.is_empty() {
@@ -316,6 +322,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     service_action: ServiceAction,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -341,6 +348,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.command_buffer.allocation_length() as u32
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

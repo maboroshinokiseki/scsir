@@ -33,6 +33,7 @@ pub struct RawSatCommand<'a, D: SatDirection> {
     interface: &'a Scsi,
     protocol: AtaProtocol,
     ck_cond: bool,
+    timeout: Option<std::time::Duration>,
 
     features: u16,
     lba: u64,
@@ -51,6 +52,7 @@ impl<'a, D: SatDirection> RawSatCommand<'a, D> {
             interface,
             protocol: AtaProtocol::PioDataOut,
             ck_cond: false,
+            timeout: None,
 
             features: 0,
             lba: 0,
@@ -71,6 +73,11 @@ impl<'a, D: SatDirection> RawSatCommand<'a, D> {
     pub fn command(&mut self, protocol: AtaProtocol, command: u8) -> &mut Self {
         self.protocol = protocol;
         self.command = command;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -195,6 +202,7 @@ impl<'a> RawSatCommand<'a, ToDevice> {
         self.interface.issue(&SatCommand::<_, ToDevice> {
             command_buffer: self.build_cmd_12()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })
@@ -204,6 +212,7 @@ impl<'a> RawSatCommand<'a, ToDevice> {
         self.interface.issue(&SatCommand::<_, ToDevice> {
             command_buffer: self.build_cmd_16()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })
@@ -215,6 +224,7 @@ impl<'a> RawSatCommand<'a, FromDevice> {
         self.interface.issue(&SatCommand::<_, FromDevice> {
             command_buffer: self.build_cmd_12()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })
@@ -224,6 +234,7 @@ impl<'a> RawSatCommand<'a, FromDevice> {
         self.interface.issue(&SatCommand::<_, FromDevice> {
             command_buffer: self.build_cmd_16()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })
@@ -235,6 +246,7 @@ impl<'a> RawSatCommand<'a, NoData> {
         self.interface.issue(&SatCommand::<_, NoData> {
             command_buffer: self.build_cmd_12()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })
@@ -244,6 +256,7 @@ impl<'a> RawSatCommand<'a, NoData> {
         self.interface.issue(&SatCommand::<_, NoData> {
             command_buffer: self.build_cmd_16()?,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
             ck_cond: self.ck_cond,
             _direction: Default::default(),
         })

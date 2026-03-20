@@ -188,6 +188,7 @@ pub(crate) struct SatCommandBuffer16 {
 pub(crate) struct SatCommand<C, D: SatDirection> {
     command_buffer: C,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
     // Whether the request explicitly requested ck_cond
     ck_cond: bool,
     _direction: PhantomData<D>,
@@ -251,6 +252,10 @@ impl<C: Copy, D: SatDirection> Command for SatCommand<C, D> {
             true => self.data_buffer.clone(),
             false => VecBufferWrapper::default(),
         }
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

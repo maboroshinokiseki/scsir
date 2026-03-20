@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ReadCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     control: u8,
     group_number: u8,
     read_protect: u8,
@@ -33,6 +34,7 @@ impl<'a> ReadCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             control: 0,
             group_number: 0,
             read_protect: 0,
@@ -53,6 +55,11 @@ impl<'a> ReadCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.control = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -192,6 +199,7 @@ impl<'a> ReadCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length,
+            timeout: self.timeout,
         })
     }
 
@@ -214,6 +222,7 @@ impl<'a> ReadCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length,
+            timeout: self.timeout,
         })
     }
 
@@ -239,6 +248,7 @@ impl<'a> ReadCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length,
+            timeout: self.timeout,
         })
     }
 
@@ -270,6 +280,7 @@ impl<'a> ReadCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length,
+            timeout: self.timeout,
         })
     }
 }
@@ -363,6 +374,7 @@ struct CommandBuffer32 {
 struct ThisCommand<C> {
     command_buffer: C,
     allocation_length: u32,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -380,6 +392,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

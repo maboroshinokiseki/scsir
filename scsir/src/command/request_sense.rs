@@ -11,6 +11,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct RequestSenseCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
 }
 
@@ -18,6 +19,7 @@ impl<'a> RequestSenseCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
                 .with_allocation_length(MAX_SENSE_BUFFER_LENGTH as u8),
@@ -34,9 +36,15 @@ impl<'a> RequestSenseCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<SenseData> {
         self.interface.issue(&ThisCommand {
             command_buffer: self.command_buffer,
+            timeout: self.timeout,
         })
     }
 }
@@ -62,6 +70,7 @@ struct CommandBuffer {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -79,6 +88,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

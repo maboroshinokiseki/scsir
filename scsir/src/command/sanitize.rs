@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct SanitizeCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     sanitize_service_action: ServiceAction,
     command_buffer: CommandBuffer,
     data_buffer: FlexibleStruct<OverwriteParameterListHeader, u8>,
@@ -38,6 +39,7 @@ impl<'a> SanitizeCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             sanitize_service_action: ServiceAction::Overwrite,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -73,6 +75,11 @@ impl<'a> SanitizeCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&'a mut self) -> OverwriteParameterListBuilder<'a> {
         OverwriteParameterListBuilder::new(self)
     }
@@ -87,6 +94,7 @@ impl<'a> SanitizeCommand<'a> {
             sanitize_service_action: self.sanitize_service_action,
             command_buffer: self.command_buffer,
             data_buffer: self.data_buffer.clone(),
+            timeout: self.timeout,
         })
     }
 }
@@ -184,6 +192,7 @@ struct ThisCommand {
     sanitize_service_action: ServiceAction,
     command_buffer: CommandBuffer,
     data_buffer: FlexibleStruct<OverwriteParameterListHeader, u8>,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -212,6 +221,10 @@ impl Command for ThisCommand {
             ServiceAction::Overwrite => self.data_buffer.total_size() as u32,
             _ => 0,
         }
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

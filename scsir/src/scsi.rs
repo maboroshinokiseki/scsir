@@ -64,6 +64,8 @@ impl Scsi {
 
         let pointer_of_sense_buffer = Some(&mut sense_buffer);
 
+        let timeout = command.timeout_override().unwrap_or(self.timeout);
+
         let mut sg_header = SgIoHeader {
             interface_id: b'S' as i32,
             data_direction: command.direction().into(),
@@ -74,8 +76,7 @@ impl Scsi {
             data: pointer_of_data_buffer,
             command: pointer_of_command_buffer,
             sense_buffer: pointer_of_sense_buffer,
-            timeout: self
-                .timeout
+            timeout: timeout
                 .as_millis()
                 .clamp(u32::MIN as u128, u32::MAX as u128) as u32,
             flags: AccessFlags::DEFAULT,
@@ -174,8 +175,9 @@ impl Scsi {
 
         spt.DataTransferLength = size_of_data_buffer;
 
-        spt.TimeOutValue = match self
-            .timeout
+        let timeout = command.timeout_override().unwrap_or(self.timeout);
+
+        spt.TimeOutValue = match timeout
             .as_secs()
             .clamp(u32::MIN as u64, u32::MAX as u64)
         {

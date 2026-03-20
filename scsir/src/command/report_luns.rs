@@ -15,6 +15,7 @@ use crate::{
 pub struct ReportLunsCommand<'a> {
     interface: &'a Scsi,
     descriptor_length: u32,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
 }
 
@@ -30,6 +31,7 @@ impl<'a> ReportLunsCommand<'a> {
             interface,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             descriptor_length: 0,
+            timeout: None,
         }
     }
 
@@ -40,6 +42,11 @@ impl<'a> ReportLunsCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.command_buffer.set_control(value);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -65,6 +72,7 @@ impl<'a> ReportLunsCommand<'a> {
             command_buffer: self
                 .command_buffer
                 .with_allocation_length(self.descriptor_length * 8 + 8),
+            timeout: self.timeout,
         })
     }
 }
@@ -91,6 +99,7 @@ struct CommandBuffer {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -108,6 +117,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

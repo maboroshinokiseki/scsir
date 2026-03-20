@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ModeSenseCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     long_lba_accepted: bool,
     disable_block_descriptors: bool,
     page_control: u8,
@@ -32,6 +33,7 @@ impl<'a> ModeSenseCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             long_lba_accepted: false,
             disable_block_descriptors: false,
             page_control: 0,
@@ -83,6 +85,11 @@ impl<'a> ModeSenseCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     fn error_check(
         &self,
         allocation_length_bits: u32,
@@ -120,6 +127,7 @@ impl<'a> ModeSenseCommand<'a> {
         let temp = ThisCommand {
             command_buffer,
             allocation_length: self.allocation_length.into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -141,6 +149,7 @@ impl<'a> ModeSenseCommand<'a> {
         let temp = ThisCommand {
             command_buffer,
             allocation_length: self.allocation_length.into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -189,6 +198,7 @@ struct CommandBuffer10 {
 struct ThisCommand<C> {
     command_buffer: C,
     allocation_length: usize,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -206,6 +216,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

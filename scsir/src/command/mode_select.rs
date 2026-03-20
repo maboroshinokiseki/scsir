@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ModeSelectCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     page_format: bool,
     revert_to_defaults: bool,
     saved_pages: bool,
@@ -23,6 +24,7 @@ impl<'a> ModeSelectCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             page_format: false,
             revert_to_defaults: false,
             saved_pages: false,
@@ -48,6 +50,11 @@ impl<'a> ModeSelectCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.control = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -89,6 +96,7 @@ impl<'a> ModeSelectCommand<'a> {
                 .with_parameter_list_length(self.data_buffer.len() as u8)
                 .with_control(self.control),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -105,6 +113,7 @@ impl<'a> ModeSelectCommand<'a> {
                 .with_parameter_list_length(self.data_buffer.len() as u16)
                 .with_control(self.control),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -150,6 +159,7 @@ struct CommandBuffer10 {
 struct ThisCommand<C: Copy> {
     command: C,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -171,6 +181,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.data_buffer.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

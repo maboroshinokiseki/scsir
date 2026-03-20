@@ -7,6 +7,7 @@ use crate::{command::bitfield_bound_check, result_data::ResultData, Command, Dat
 #[derive(Clone, Debug)]
 pub struct SynchronizeCacheCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     immediate: bool,
     group_number: u8,
     logical_block_address: u64,
@@ -18,6 +19,7 @@ impl<'a> SynchronizeCacheCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             immediate: false,
             group_number: 0,
             logical_block_address: 0,
@@ -52,6 +54,11 @@ impl<'a> SynchronizeCacheCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     fn error_check(
         &self,
         logical_block_address_bits: u32,
@@ -83,7 +90,10 @@ impl<'a> SynchronizeCacheCommand<'a> {
             .with_number_of_blocks(self.number_of_blocks as u16)
             .with_control(self.control);
 
-        self.interface.issue(&ThisCommand { command_buffer })
+        self.interface.issue(&ThisCommand {
+            command_buffer,
+            timeout: self.timeout,
+        })
     }
 
     pub fn issue_16(&mut self) -> crate::Result<()> {
@@ -97,7 +107,10 @@ impl<'a> SynchronizeCacheCommand<'a> {
             .with_group_number(self.group_number)
             .with_control(self.control);
 
-        self.interface.issue(&ThisCommand { command_buffer })
+        self.interface.issue(&ThisCommand {
+            command_buffer,
+            timeout: self.timeout,
+        })
     }
 }
 
@@ -142,6 +155,7 @@ struct CommandBuffer16 {
 
 struct ThisCommand<C> {
     command_buffer: C,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -159,6 +173,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {}

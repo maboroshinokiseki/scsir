@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct SetIdentifyingInformationCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     information_type: u8,
     command_buffer: CommandBuffer,
     data_buffer: Vec<u8>,
@@ -21,6 +22,7 @@ impl<'a> SetIdentifyingInformationCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             information_type: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -40,6 +42,11 @@ impl<'a> SetIdentifyingInformationCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&mut self, value: &[u8]) -> &mut Self {
         self.data_buffer = value.to_owned();
         self.command_buffer
@@ -56,6 +63,7 @@ impl<'a> SetIdentifyingInformationCommand<'a> {
                 .command_buffer
                 .with_information_type(self.information_type),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 }
@@ -85,6 +93,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -110,6 +119,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.data_buffer.len() as u32
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

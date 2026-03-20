@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct WriteCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     control: u8,
     group_number: u8,
     write_protect: u8,
@@ -32,6 +33,7 @@ impl<'a> WriteCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             control: 0,
             group_number: 0,
             write_protect: 0,
@@ -68,6 +70,11 @@ impl<'a> WriteCommand<'a> {
 
     pub fn force_unit_access(&mut self, value: bool) -> &mut Self {
         self.force_unit_access = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -193,6 +200,7 @@ impl<'a> WriteCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 
@@ -214,6 +222,7 @@ impl<'a> WriteCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 
@@ -238,6 +247,7 @@ impl<'a> WriteCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 
@@ -268,6 +278,7 @@ impl<'a> WriteCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 }
@@ -361,6 +372,7 @@ struct CommandBuffer32 {
 struct ThisCommand<C> {
     command_buffer: C,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -382,6 +394,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.data_buffer.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

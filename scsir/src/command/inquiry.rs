@@ -16,6 +16,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct InquiryCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
 }
 
@@ -23,6 +24,7 @@ impl<'a> InquiryCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
         }
     }
@@ -36,6 +38,11 @@ impl<'a> InquiryCommand<'a> {
 
     pub fn allocation_length(&mut self, value: u16) -> &mut Self {
         self.command_buffer.set_allocation_length(value);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -75,6 +82,7 @@ impl<'a> InquiryCommand<'a> {
         let this_command: ThisCommand<B, E> = ThisCommand {
             command_buffer: self.command_buffer,
             element_length,
+            timeout: self.timeout,
             phantom_data: PhantomData,
         };
 
@@ -105,6 +113,7 @@ struct CommandBuffer {
 struct ThisCommand<Body, Element> {
     command_buffer: CommandBuffer,
     element_length: usize,
+    timeout: Option<std::time::Duration>,
 
     phantom_data: PhantomData<(Body, Element)>,
 }
@@ -125,6 +134,10 @@ impl<Body: Copy, Element: Copy> Command for ThisCommand<Body, Element> {
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
             .with_allocation_length(self.data_size().try_into().unwrap_or(u16::MAX))
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

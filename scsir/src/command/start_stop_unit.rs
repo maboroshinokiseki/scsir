@@ -7,6 +7,7 @@ use crate::{command::bitfield_bound_check, result_data::ResultData, Command, Dat
 #[derive(Clone, Debug)]
 pub struct StartStopUnitCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     power_condition_modifer: u8,
     power_condition: u8,
     command_buffer: CommandBuffer,
@@ -16,6 +17,7 @@ impl<'a> StartStopUnitCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             power_condition_modifer: 0,
             power_condition: 0,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
@@ -59,6 +61,11 @@ impl<'a> StartStopUnitCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<()> {
         bitfield_bound_check!(self.power_condition_modifer, 4, "power condition modifer")?;
         bitfield_bound_check!(self.power_condition, 4, "power condition")?;
@@ -68,6 +75,7 @@ impl<'a> StartStopUnitCommand<'a> {
                 .command_buffer
                 .with_power_condition_modifer(self.power_condition_modifer)
                 .with_power_condition(self.power_condition),
+            timeout: self.timeout,
         })
     }
 }
@@ -99,6 +107,7 @@ struct CommandBuffer {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -116,6 +125,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {}

@@ -111,6 +111,11 @@ impl<'a> SecuritySetPasswordSatCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
+    }
+
     // ######################################################################
 
     pub fn issue_12(&mut self) -> SatResult<()> {
@@ -135,6 +140,11 @@ impl<'a> SecurityErasePrepareSatCommand<'a> {
         raw.command(AtaProtocol::NonData, OPCODE_SECURITY_ERASE_PREPARE)
             .ck_cond(true);
         Self { raw }
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
     }
 
     // ######################################################################
@@ -164,6 +174,11 @@ impl<'a> SecurityEraseUnitSatCommand<'a> {
             raw,
             data: vec![0u8; 512],
         }
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
     }
 
     pub fn mode(&mut self, mode: EraseMode) -> &mut Self {

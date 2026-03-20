@@ -9,6 +9,7 @@ use crate::{result_data::ResultData, Command, DataDirection, Scsi};
 #[derive(Clone, Debug)]
 pub struct ReportTimestampCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
 }
 
@@ -22,6 +23,7 @@ impl<'a> ReportTimestampCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
                 .with_service_action(SERVICE_ACTION)
@@ -34,9 +36,15 @@ impl<'a> ReportTimestampCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<CommandResult> {
         self.interface.issue(&ThisCommand {
             command_buffer: self.command_buffer,
+            timeout: self.timeout,
         })
     }
 }
@@ -75,6 +83,7 @@ struct ReportTimestampParameterData {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -92,6 +101,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

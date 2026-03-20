@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ReadDefectDataCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     request_primary_defect_list: bool,
     request_grown_defect_list: bool,
     defect_list_format: u8,
@@ -85,6 +86,7 @@ impl<'a> ReadDefectDataCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             request_primary_defect_list: false,
             request_grown_defect_list: false,
             defect_list_format: 0,
@@ -117,6 +119,11 @@ impl<'a> ReadDefectDataCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.control = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -184,6 +191,7 @@ impl<'a> ReadDefectDataCommand<'a> {
             command_buffer,
             extra_allocation_length,
             defect_list_format: self.defect_list_format,
+            timeout: self.timeout,
             marker: PhantomData::<DataBufferHeader10>,
         })?;
 
@@ -216,6 +224,7 @@ impl<'a> ReadDefectDataCommand<'a> {
             command_buffer,
             extra_allocation_length,
             defect_list_format: self.defect_list_format,
+            timeout: self.timeout,
             marker: PhantomData::<DataBufferHeader12>,
         })?;
 
@@ -293,6 +302,7 @@ struct ThisCommand<C, Body> {
     command_buffer: C,
     extra_allocation_length: usize,
     defect_list_format: u8,
+    timeout: Option<std::time::Duration>,
 
     marker: PhantomData<Body>,
 }
@@ -312,6 +322,10 @@ impl<C: Copy, Body: Copy> Command for ThisCommand<C, Body> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

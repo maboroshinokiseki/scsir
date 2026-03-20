@@ -38,6 +38,11 @@ impl<'a> IdentifySatCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
+    }
+
     pub fn issue_12(&mut self) -> SatResult<IdentifySatResponse> {
         Ok(self.raw.issue_12()?.map(IdentifySatResponse::new))
     }

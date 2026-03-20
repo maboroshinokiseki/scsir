@@ -9,6 +9,7 @@ use crate::{command::bitfield_bound_check, result_data::ResultData, Command, Dat
 #[derive(Clone, Debug)]
 pub struct StreamControlCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     stream_control: u8,
     command_buffer: CommandBuffer,
     data_buffer: DataBuffer,
@@ -24,6 +25,7 @@ impl<'a> StreamControlCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             stream_control: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -48,6 +50,11 @@ impl<'a> StreamControlCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&'a mut self) -> ParameterBuilder<'a> {
         ParameterBuilder::new(self)
     }
@@ -58,6 +65,7 @@ impl<'a> StreamControlCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer: self.command_buffer.with_stream_control(self.stream_control),
             data_buffer: self.data_buffer,
+            timeout: self.timeout,
         })
     }
 }
@@ -115,6 +123,7 @@ struct DataBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: DataBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -132,6 +141,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ReportIdentifyingInformationCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     information_type: u8,
     command_buffer: CommandBuffer,
 }
@@ -20,6 +21,7 @@ impl<'a> ReportIdentifyingInformationCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             information_type: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -43,6 +45,11 @@ impl<'a> ReportIdentifyingInformationCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<Vec<u8>> {
         bitfield_bound_check!(self.information_type, 7, "information type")?;
 
@@ -50,6 +57,7 @@ impl<'a> ReportIdentifyingInformationCommand<'a> {
             command_buffer: self
                 .command_buffer
                 .with_information_type(self.information_type),
+            timeout: self.timeout,
         })
     }
 }
@@ -78,6 +86,7 @@ struct CommandBuffer {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -95,6 +104,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

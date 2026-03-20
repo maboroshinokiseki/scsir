@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ReportSupportedOperationCodesCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     reporting_options: u8,
     command_buffer: CommandBuffer,
 }
@@ -57,6 +58,7 @@ impl<'a> ReportSupportedOperationCodesCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             reporting_options: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -96,6 +98,11 @@ impl<'a> ReportSupportedOperationCodesCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<CommandResult> {
         bitfield_bound_check!(self.reporting_options, 3, "reporting options")?;
 
@@ -103,6 +110,7 @@ impl<'a> ReportSupportedOperationCodesCommand<'a> {
             command_buffer: self
                 .command_buffer
                 .with_reporting_options(self.reporting_options),
+            timeout: self.timeout,
         })
     }
 }
@@ -173,6 +181,7 @@ struct CommandTimeoutsDescriptor {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -198,6 +207,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.command_buffer.allocation_length()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

@@ -20,6 +20,11 @@ impl<'a> FlushCacheSatCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
+    }
+
     // ######################################################################
 
     pub fn issue_12(&mut self) -> SatResult<()> {
@@ -47,6 +52,11 @@ impl<'a> FlushCacheExtSatCommand<'a> {
 
     pub fn device(&mut self, device: u8) -> &mut Self {
         self.raw.device(device);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
         self
     }
 

@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ReadBufferCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     mode_specific: u8,
     mode: u8,
     buffer_offset: u64,
@@ -24,6 +25,7 @@ impl<'a> ReadBufferCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             mode_specific: 0,
             mode: 0,
             buffer_offset: 0,
@@ -67,6 +69,11 @@ impl<'a> ReadBufferCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     fn error_check(
         &self,
         buffer_offset_bits: u32,
@@ -99,6 +106,7 @@ impl<'a> ReadBufferCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length: self.allocation_length,
+            timeout: self.timeout,
         })
     }
 
@@ -117,6 +125,7 @@ impl<'a> ReadBufferCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             allocation_length: self.allocation_length,
+            timeout: self.timeout,
         })
     }
 }
@@ -157,6 +166,7 @@ struct CommandBuffer16 {
 struct ThisCommand<C> {
     command_buffer: C,
     allocation_length: u32,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -174,6 +184,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

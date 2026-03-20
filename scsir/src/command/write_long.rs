@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct WriteLongCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     wr_uncor: bool,
     logical_block_address: u64,
     control: u8,
@@ -22,6 +23,7 @@ impl<'a> WriteLongCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             wr_uncor: false,
             logical_block_address: 0,
             control: 0,
@@ -41,6 +43,11 @@ impl<'a> WriteLongCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.control = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -64,6 +71,7 @@ impl<'a> WriteLongCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 
@@ -81,6 +89,7 @@ impl<'a> WriteLongCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer,
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 }
@@ -128,6 +137,7 @@ struct CommandBuffer16 {
 struct ThisCommand<C> {
     command_buffer: C,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl<C: Copy> Command for ThisCommand<C> {
@@ -149,6 +159,10 @@ impl<C: Copy> Command for ThisCommand<C> {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.data_buffer.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct FormatUnitCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     format_protection_information: u8,
     defect_list_format: u8,
     fast_format: u8,
@@ -58,6 +59,7 @@ impl<'a> FormatUnitCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             format_protection_information: 0,
             defect_list_format: 0,
             fast_format: 0,
@@ -107,6 +109,11 @@ impl<'a> FormatUnitCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&'a mut self) -> ParameterBuilder<'a> {
         ParameterBuilder::new(self)
     }
@@ -129,6 +136,7 @@ impl<'a> FormatUnitCommand<'a> {
             let temp = ThisCommand {
                 command_buffer: self.command_buffer,
                 data_buffer: vec![],
+                timeout: self.timeout,
             };
             return self.interface.issue(&temp);
         }
@@ -188,6 +196,7 @@ impl<'a> FormatUnitCommand<'a> {
         let temp = ThisCommand {
             command_buffer: self.command_buffer,
             data_buffer,
+            timeout: self.timeout,
         };
         self.interface.issue(&temp)
     }
@@ -718,6 +727,7 @@ pub(super) struct PhysicalSectorFormatAddressDescriptor {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: Vec<u8>,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -743,6 +753,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.data_buffer.len() as u32
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

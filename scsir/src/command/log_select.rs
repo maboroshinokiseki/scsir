@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct LogSelectCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     page_control: u8,
     page_code: u8,
     command_buffer: CommandBuffer,
@@ -24,6 +25,7 @@ impl<'a> LogSelectCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             page_control: 0,
             page_code: 0,
@@ -63,6 +65,11 @@ impl<'a> LogSelectCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     // parameter length must be less or equal than 0xFFFF
     pub fn parameter(&mut self, value: &[u8]) -> &mut Self {
         self.data_buffer.clear();
@@ -82,6 +89,7 @@ impl<'a> LogSelectCommand<'a> {
                 .with_page_code(self.page_code)
                 .with_parameter_list_length(self.data_buffer.len() as u16),
             parameter: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)?;
@@ -124,6 +132,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     parameter: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -145,6 +154,10 @@ impl Command for ThisCommand {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.parameter.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

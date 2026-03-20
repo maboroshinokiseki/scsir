@@ -9,6 +9,7 @@ use crate::{result_data::ResultData, Command, DataDirection, Scsi};
 #[derive(Clone, Debug)]
 pub struct ReadCapacityCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     control: u8,
 }
 
@@ -36,12 +37,18 @@ impl<'a> ReadCapacityCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             control: 0,
         }
     }
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.control = value;
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -52,6 +59,7 @@ impl<'a> ReadCapacityCommand<'a> {
 
         let result = self.interface.issue(&ThisCommand {
             command_buffer,
+            timeout: self.timeout,
             marker: PhantomData::<DataBuffer10>,
         })?;
 
@@ -70,6 +78,7 @@ impl<'a> ReadCapacityCommand<'a> {
 
         let result = self.interface.issue(&ThisCommand {
             command_buffer,
+            timeout: self.timeout,
             marker: PhantomData::<DataBuffer16>,
         })?;
 
@@ -154,6 +163,7 @@ struct DataBuffer16 {
 
 struct ThisCommand<C, D> {
     command_buffer: C,
+    timeout: Option<std::time::Duration>,
 
     marker: PhantomData<D>,
 }
@@ -173,6 +183,10 @@ impl<C: Copy, D: Copy + Default> Command for ThisCommand<C, D> {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

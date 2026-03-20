@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct PersistentReserveOutCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     service_action: ServiceAction,
     reservation_scope: u8,
     reservation_type: u8,
@@ -54,6 +55,7 @@ impl<'a> PersistentReserveOutCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             service_action: ServiceAction::Register,
             reservation_scope: 0,
             reservation_type: 0,
@@ -82,6 +84,11 @@ impl<'a> PersistentReserveOutCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&'a mut self) -> ParameterBuilder<'a> {
         ParameterBuilder::new(self)
     }
@@ -100,6 +107,7 @@ impl<'a> PersistentReserveOutCommand<'a> {
                 .with_reservation_type(self.reservation_type)
                 .with_parameter_list_length(self.data_buffer.len() as u32),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -308,6 +316,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -329,6 +338,10 @@ impl Command for ThisCommand {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.data_buffer.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

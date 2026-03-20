@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct SecurityProtocolOutCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
     data_buffer: Vec<u8>,
 }
@@ -20,6 +21,7 @@ impl<'a> SecurityProtocolOutCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             data_buffer: vec![],
         }
@@ -42,6 +44,11 @@ impl<'a> SecurityProtocolOutCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.command_buffer.set_control(value);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -70,6 +77,7 @@ impl<'a> SecurityProtocolOutCommand<'a> {
                 .command_buffer
                 .with_transfer_length(transfer_length as u32),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 }
@@ -99,6 +107,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -120,6 +129,10 @@ impl Command for ThisCommand {
 
     fn data(&self) -> Self::DataBufferWrapper {
         self.data_buffer.clone()
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data_size(&self) -> u32 {

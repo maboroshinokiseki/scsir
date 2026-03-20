@@ -7,6 +7,7 @@ use crate::{command::bitfield_bound_check, result_data::ResultData, Command, Dat
 #[derive(Clone, Debug)]
 pub struct BackgroundControlCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     background_operation_control: u8,
     command_buffer: CommandBuffer,
 }
@@ -15,6 +16,7 @@ impl<'a> BackgroundControlCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             background_operation_control: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -43,6 +45,11 @@ impl<'a> BackgroundControlCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn issue(&mut self) -> crate::Result<()> {
         bitfield_bound_check!(
             self.background_operation_control,
@@ -54,6 +61,7 @@ impl<'a> BackgroundControlCommand<'a> {
             command_buffer: self
                 .command_buffer
                 .with_background_operation_control(self.background_operation_control),
+            timeout: self.timeout,
         };
         self.interface.issue(&temp)
     }
@@ -83,6 +91,7 @@ struct CommandBuffer {
 
 struct ThisCommand {
     command_buffer: CommandBuffer,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -100,6 +109,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {}

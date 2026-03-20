@@ -26,6 +26,11 @@ impl<'a> SmartSatCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.raw.timeout(timeout);
+        self
+    }
+
     // ######################################################################
 
     pub fn issue_12(&mut self) -> SatResult<Vec<u8>> {

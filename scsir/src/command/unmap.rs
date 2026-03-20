@@ -14,6 +14,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct UnmapCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     group_number: u8,
     command_buffer: CommandBuffer,
     data_buffer: FlexibleStruct<UnmapParameterHeader, UnmapBlockDescriptor>,
@@ -29,6 +30,7 @@ impl<'a> UnmapCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             group_number: 0,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             data_buffer: FlexibleStruct::new(),
@@ -51,6 +53,11 @@ impl<'a> UnmapCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&'a mut self) -> ParameterBuilder<'a> {
         ParameterBuilder::new(self)
     }
@@ -62,6 +69,7 @@ impl<'a> UnmapCommand<'a> {
         let temp = ThisCommand {
             command_buffer: self.command_buffer,
             data_buffer: self.data_buffer.clone(),
+            timeout: self.timeout,
         };
         self.interface.issue(&temp)
     }
@@ -149,6 +157,7 @@ struct UnmapBlockDescriptor {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: FlexibleStruct<UnmapParameterHeader, UnmapBlockDescriptor>,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -174,6 +183,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.data_buffer.total_size() as u32
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {

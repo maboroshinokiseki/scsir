@@ -17,6 +17,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct LogSenseCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     page_control: u8,
     page_code: u8,
     command_buffer: CommandBuffer,
@@ -26,6 +27,7 @@ impl<'a> LogSenseCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             page_control: 0,
             page_code: 0,
@@ -66,6 +68,11 @@ impl<'a> LogSenseCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.command_buffer.set_control(value);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -111,6 +118,7 @@ impl<'a> LogSenseCommand<'a> {
                 .with_page_control(self.page_control)
                 .with_page_code(self.page_code),
             element_length,
+            timeout: self.timeout,
             phantom_data: PhantomData,
         };
 
@@ -145,6 +153,7 @@ struct CommandBuffer {
 struct ThisCommand<Body, Element> {
     command_buffer: CommandBuffer,
     element_length: usize,
+    timeout: Option<std::time::Duration>,
 
     phantom_data: PhantomData<(Body, Element)>,
 }
@@ -165,6 +174,10 @@ impl<Body: Copy, Element: Copy> Command for ThisCommand<Body, Element> {
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
             .with_allocation_length(self.data_size().try_into().unwrap_or(u16::MAX))
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

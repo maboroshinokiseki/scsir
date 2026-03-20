@@ -13,6 +13,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct GetLbaStatusCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     command_buffer: CommandBuffer,
     descriptor_length: u32,
 }
@@ -42,6 +43,7 @@ impl<'a> GetLbaStatusCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             descriptor_length: 0,
             command_buffer: CommandBuffer::new()
                 .with_operation_code(OPERATION_CODE)
@@ -57,6 +59,11 @@ impl<'a> GetLbaStatusCommand<'a> {
 
     pub fn control(&mut self, value: u8) -> &mut Self {
         self.command_buffer.set_control(value);
+        self
+    }
+
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
         self
     }
 
@@ -84,6 +91,7 @@ impl<'a> GetLbaStatusCommand<'a> {
                     + self.descriptor_length * size_of::<Descriptor>() as u32,
             ),
             max_descriptor_length: self.descriptor_length,
+            timeout: self.timeout,
         };
 
         self.interface.issue(&temp)
@@ -130,6 +138,7 @@ struct Descriptor {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     max_descriptor_length: u32,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -147,6 +156,10 @@ impl Command for ThisCommand {
 
     fn command(&self) -> Self::CommandBuffer {
         self.command_buffer
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn data(&self) -> Self::DataBufferWrapper {

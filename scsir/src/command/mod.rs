@@ -44,7 +44,7 @@ pub mod write_long;
 pub mod write_same;
 pub mod write_stream;
 
-use std::{borrow::BorrowMut, mem::size_of};
+use std::{borrow::BorrowMut, mem::size_of, time::Duration};
 
 use crate::{result_data::ResultData, DataDirection};
 
@@ -58,6 +58,10 @@ pub trait Command {
     fn direction(&self) -> DataDirection;
     fn command(&self) -> Self::CommandBuffer;
     fn data(&self) -> Self::DataBufferWrapper;
+
+    fn timeout_override(&self) -> Option<Duration> {
+        None
+    }
 
     /// useful if have some custom data wrapper or want to trim data
     fn data_size(&self) -> u32 {

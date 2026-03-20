@@ -12,6 +12,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct SendDiagnosticCommand<'a> {
     interface: &'a Scsi,
+    timeout: Option<std::time::Duration>,
     self_test_code: u8,
     command_buffer: CommandBuffer,
     data_buffer: Vec<u8>,
@@ -21,6 +22,7 @@ impl<'a> SendDiagnosticCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
+            timeout: None,
             self_test_code: 0,
             command_buffer: CommandBuffer::new().with_operation_code(OPERATION_CODE),
             data_buffer: vec![],
@@ -59,6 +61,11 @@ impl<'a> SendDiagnosticCommand<'a> {
         self
     }
 
+    pub fn timeout(&mut self, timeout: std::time::Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     pub fn parameter(&mut self, value: &[u8]) -> &mut Self {
         self.data_buffer = value.to_owned();
         self.command_buffer
@@ -73,6 +80,7 @@ impl<'a> SendDiagnosticCommand<'a> {
         self.interface.issue(&ThisCommand {
             command_buffer: self.command_buffer.with_self_test_code(self.self_test_code),
             data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
         })
     }
 }
@@ -103,6 +111,7 @@ struct CommandBuffer {
 struct ThisCommand {
     command_buffer: CommandBuffer,
     data_buffer: VecBufferWrapper,
+    timeout: Option<std::time::Duration>,
 }
 
 impl Command for ThisCommand {
@@ -128,6 +137,10 @@ impl Command for ThisCommand {
 
     fn data_size(&self) -> u32 {
         self.data_buffer.len() as u32
+    }
+
+    fn timeout_override(&self) -> Option<std::time::Duration> {
+        self.timeout
     }
 
     fn process_result(&self, result: ResultData<Self::DataBufferWrapper>) -> Self::ReturnType {
