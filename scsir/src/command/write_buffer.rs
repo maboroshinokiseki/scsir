@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct ReadBufferCommand<'a> {
+pub struct WriteBufferCommand<'a> {
     interface: &'a Scsi,
     timeout: Option<std::time::Duration>,
     mode_specific: u8,
@@ -20,7 +20,7 @@ pub struct ReadBufferCommand<'a> {
     data_buffer: Vec<u8>,
 }
 
-impl<'a> ReadBufferCommand<'a> {
+impl<'a> WriteBufferCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
             interface,
@@ -94,8 +94,8 @@ impl<'a> ReadBufferCommand<'a> {
 }
 
 impl Scsi {
-    pub fn write_buffer(&self) -> ReadBufferCommand<'_> {
-        ReadBufferCommand::new(self)
+    pub fn write_buffer(&self) -> WriteBufferCommand<'_> {
+        WriteBufferCommand::new(self)
     }
 }
 
