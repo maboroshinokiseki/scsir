@@ -55,7 +55,8 @@ impl SenseData {
                 while descriptor_index < sense_length {
                     let descriptor = Descriptor::parse(&raw[descriptor_index..], sense_key);
                     descriptors.push(descriptor);
-                    descriptor_index += DESCRIPTOR_HEADER_LENGTH + raw[1] as usize;
+                    descriptor_index +=
+                        DESCRIPTOR_HEADER_LENGTH + raw[descriptor_index + 1] as usize;
                 }
 
                 let sense = DescriptorSenseData {
