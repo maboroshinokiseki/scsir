@@ -24,10 +24,19 @@ pub struct ReadCommand<'a> {
     expected_logical_block_application_tag: u16,
     logical_block_application_tag_mask: u16,
     transfer_length: u32,
+    transfer_length_specified: bool,
     dld_0: bool,
     dld_1: bool,
     dld_2: bool,
     logical_block_size: u32,
+}
+
+#[derive(Clone, Copy)]
+enum ReadCheckMode {
+    Read6,
+    Standard,
+    WithDld,
+    WithExpectedTags,
 }
 
 impl<'a> ReadCommand<'a> {
@@ -46,6 +55,7 @@ impl<'a> ReadCommand<'a> {
             expected_logical_block_application_tag: 0,
             logical_block_application_tag_mask: 0,
             transfer_length: 0,
+            transfer_length_specified: false,
             dld_0: false,
             dld_1: false,
             dld_2: false,
@@ -110,8 +120,13 @@ impl<'a> ReadCommand<'a> {
         self
     }
 
+    /// For `READ (6)`, this follows the SBC definition directly: a value of `0`
+    /// encodes a 256 logical block transfer. `issue_6()` requires this field to be
+    /// set explicitly so the default value does not accidentally issue a 256-block
+    /// read.
     pub fn transfer_length(&mut self, value: u32) -> &mut Self {
         self.transfer_length = value;
+        self.transfer_length_specified = true;
         self
     }
 
@@ -140,11 +155,37 @@ impl<'a> ReadCommand<'a> {
         group_number_bits: u32,
         logical_block_address_bits: u32,
         transfer_length_bits: u32,
-        allow_dld: bool,
-        expect_tag: bool,
+        mode: ReadCheckMode,
     ) -> crate::Result<()> {
-        bitfield_bound_check!(self.read_protect, 3, "read protect")?;
-        bitfield_bound_check!(self.group_number, group_number_bits, "group number")?;
+        if matches!(mode, ReadCheckMode::Read6) {
+            if !self.transfer_length_specified {
+                return Err(crate::Error::BadArgument(
+                    "READ (6) requires transfer length to be set explicitly.".to_owned(),
+                ));
+            }
+
+            if self.read_protect != 0
+                || self.disable_page_out
+                || self.force_unit_access
+                || self.rebuild_assist_recovery_control
+                || self.group_number != 0
+                || self.dld_0
+                || self.dld_1
+                || self.dld_2
+                || self.expected_initial_logical_block_reference_tag != 0
+                || self.expected_logical_block_application_tag != 0
+                || self.logical_block_application_tag_mask != 0
+            {
+                return Err(crate::Error::BadArgument(
+                    "READ (6) only supports logical block address, transfer length, logical block size, timeout, and control."
+                        .to_owned(),
+                ));
+            }
+        } else {
+            bitfield_bound_check!(self.read_protect, 3, "read protect")?;
+            bitfield_bound_check!(self.group_number, group_number_bits, "group number")?;
+        }
+
         bitfield_bound_check!(
             self.logical_block_address,
             logical_block_address_bits,
@@ -156,18 +197,21 @@ impl<'a> ReadCommand<'a> {
             "transfer length"
         )?;
         bitfield_bound_check!(
-            (self.transfer_length as u64).saturating_mul(self.logical_block_size as u64),
+            (self.effective_transfer_length(mode) as u64)
+                .saturating_mul(self.logical_block_size as u64),
             32,
             "total transfer bytes"
         )?;
 
-        if !allow_dld && (self.dld_0 || self.dld_1 || self.dld_2) {
+        if !matches!(mode, ReadCheckMode::Read6 | ReadCheckMode::WithDld)
+            && (self.dld_0 || self.dld_1 || self.dld_2)
+        {
             return Err(crate::Error::BadArgument(
                 "DLDs are not allowed here".to_owned(),
             ));
         }
 
-        if !expect_tag
+        if !matches!(mode, ReadCheckMode::Read6 | ReadCheckMode::WithExpectedTags)
             && (self.expected_initial_logical_block_reference_tag != 0
                 || self.expected_logical_block_application_tag != 0
                 || self.logical_block_application_tag_mask != 0)
@@ -180,8 +224,35 @@ impl<'a> ReadCommand<'a> {
         Ok(())
     }
 
+    fn effective_transfer_length(&self, mode: ReadCheckMode) -> u32 {
+        match mode {
+            ReadCheckMode::Read6 if self.transfer_length == 0 => 256,
+            _ => self.transfer_length,
+        }
+    }
+
+    pub fn issue_6(&mut self) -> crate::Result<Vec<u8>> {
+        self.common_check(0, 21, 8, ReadCheckMode::Read6)?;
+
+        let allocation_blocks = self.effective_transfer_length(ReadCheckMode::Read6);
+
+        let command_buffer = CommandBuffer6::new()
+            .with_operation_code(OPERATION_CODE_6)
+            .with_logical_block_address(self.logical_block_address as u32)
+            .with_transfer_length(self.transfer_length as u8)
+            .with_control(self.control);
+
+        let allocation_length = self.logical_block_size.saturating_mul(allocation_blocks);
+
+        self.interface.issue(&ThisCommand {
+            command_buffer,
+            allocation_length,
+            timeout: self.timeout,
+        })
+    }
+
     pub fn issue_10(&mut self) -> crate::Result<Vec<u8>> {
-        self.common_check(5, 32, 16, false, false)?;
+        self.common_check(5, 32, 16, ReadCheckMode::Standard)?;
 
         let command_buffer = CommandBuffer10::new()
             .with_operation_code(OPERATION_CODE_10)
@@ -204,7 +275,7 @@ impl<'a> ReadCommand<'a> {
     }
 
     pub fn issue_12(&mut self) -> crate::Result<Vec<u8>> {
-        self.common_check(5, 32, 32, false, false)?;
+        self.common_check(5, 32, 32, ReadCheckMode::Standard)?;
 
         let command_buffer = CommandBuffer12::new()
             .with_operation_code(OPERATION_CODE_12)
@@ -227,7 +298,7 @@ impl<'a> ReadCommand<'a> {
     }
 
     pub fn issue_16(&mut self) -> crate::Result<Vec<u8>> {
-        self.common_check(6, 64, 32, true, false)?;
+        self.common_check(6, 64, 32, ReadCheckMode::WithDld)?;
 
         let command_buffer = CommandBuffer16::new()
             .with_operation_code(OPERATION_CODE_16)
@@ -253,7 +324,7 @@ impl<'a> ReadCommand<'a> {
     }
 
     pub fn issue_32(&mut self) -> crate::Result<Vec<u8>> {
-        self.common_check(5, 64, 32, false, true)?;
+        self.common_check(5, 64, 32, ReadCheckMode::WithExpectedTags)?;
 
         let command_buffer = CommandBuffer32::new()
             .with_operation_code(OPERATION_CODE_32)
@@ -291,11 +362,22 @@ impl Scsi {
     }
 }
 
+const OPERATION_CODE_6: u8 = 0x08;
 const OPERATION_CODE_10: u8 = 0x28;
 const OPERATION_CODE_12: u8 = 0xA8;
 const OPERATION_CODE_16: u8 = 0x88;
 const OPERATION_CODE_32: u8 = 0x7F;
 const SERVICE_ACTION_32: u16 = 0x0009;
+
+#[bitfield]
+#[derive(Clone, Copy)]
+struct CommandBuffer6 {
+    operation_code: B8,
+    reserved: B3,
+    logical_block_address: B21,
+    transfer_length: B8,
+    control: B8,
+}
 
 #[bitfield]
 #[derive(Clone, Copy)]
@@ -419,6 +501,7 @@ mod tests {
     use super::*;
     use std::mem::size_of;
 
+    const COMMAND_LENGTH_6: usize = 6;
     const COMMAND_LENGTH_10: usize = 10;
     const COMMAND_LENGTH_12: usize = 12;
     const COMMAND_LENGTH_16: usize = 16;
@@ -426,6 +509,12 @@ mod tests {
 
     #[test]
     fn layout_test() {
+        assert_eq!(
+            size_of::<CommandBuffer6>(),
+            COMMAND_LENGTH_6,
+            concat!("Size of: ", stringify!(CommandBuffer6))
+        );
+
         assert_eq!(
             size_of::<CommandBuffer10>(),
             COMMAND_LENGTH_10,

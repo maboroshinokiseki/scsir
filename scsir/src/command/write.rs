@@ -29,6 +29,13 @@ pub struct WriteCommand<'a> {
     data_buffer: Vec<u8>,
 }
 
+enum WriteCheckMode {
+    Write6,
+    Standard,
+    WithDld,
+    WithExpectedTags,
+}
+
 impl<'a> WriteCommand<'a> {
     fn new(interface: &'a Scsi) -> Self {
         Self {
@@ -134,11 +141,47 @@ impl<'a> WriteCommand<'a> {
         group_number_bits: u32,
         logical_block_address_bits: u32,
         transfer_length_bits: u32,
-        allow_dld: bool,
-        expect_tag: bool,
+        mode: WriteCheckMode,
     ) -> crate::Result<()> {
-        bitfield_bound_check!(self.group_number, group_number_bits, "group number")?;
-        bitfield_bound_check!(self.write_protect, 3, "verify protect")?;
+        let transfer_length = self.data_transfer_length();
+
+        if matches!(mode, WriteCheckMode::Write6) {
+            if self.write_protect != 0
+                || self.disable_page_out
+                || self.force_unit_access
+                || self.group_number != 0
+                || self.dld_0
+                || self.dld_1
+                || self.dld_2
+                || self.expected_initial_logical_block_reference_tag != 0
+                || self.expected_logical_block_application_tag != 0
+                || self.logical_block_application_tag_mask != 0
+            {
+                return Err(crate::Error::BadArgument(
+                    "WRITE (6) only supports logical block address, parameter data, logical block size, timeout, and control."
+                        .to_owned(),
+                ));
+            }
+
+            if transfer_length == 0 || transfer_length > 256 {
+                return Err(crate::Error::ArgumentOutOfBounds(
+                    "parameter length is out of bounds for WRITE (6). The transfer length must be between 1 and 256 logical blocks."
+                        .to_owned(),
+                ));
+            }
+        } else {
+            bitfield_bound_check!(self.group_number, group_number_bits, "group number")?;
+            bitfield_bound_check!(self.write_protect, 3, "verify protect")?;
+
+            if transfer_length.wrapping_shr(transfer_length_bits) != 0 {
+                return Err(crate::Error::ArgumentOutOfBounds(format!(
+                    "parameter length is out of bounds. The maximum possible value is {}, but {} was provided.",
+                    1u128.wrapping_shl(transfer_length_bits) * self.logical_block_size as u128,
+                    self.data_buffer.len()
+                )));
+            }
+        }
+
         bitfield_bound_check!(
             self.logical_block_address,
             logical_block_address_bits,
@@ -152,27 +195,28 @@ impl<'a> WriteCommand<'a> {
             )));
         }
 
-        if (self.data_buffer.len() / self.logical_block_size as usize)
-            .wrapping_shr(transfer_length_bits)
-            != 0
-        {
+        if self.data_buffer.len() > u32::MAX as usize {
             return Err(crate::Error::ArgumentOutOfBounds(format!(
-                "parameter length is out of bounds. The maximum possible value is {}, but {} was provided.",
-                1u128.wrapping_shl(transfer_length_bits) * self.logical_block_size as u128,
+                "parameter length is out of bounds. The maximum transport byte count is {}, but {} was provided.",
+                u32::MAX,
                 self.data_buffer.len()
             )));
         }
 
-        if !allow_dld && (self.dld_0 || self.dld_1 || self.dld_2) {
+        if !matches!(mode, WriteCheckMode::Write6 | WriteCheckMode::WithDld)
+            && (self.dld_0 || self.dld_1 || self.dld_2)
+        {
             return Err(crate::Error::BadArgument(
                 "DLDs are not allowed here".to_owned(),
             ));
         }
 
-        if !expect_tag
-            && (self.expected_initial_logical_block_reference_tag != 0
-                || self.expected_logical_block_application_tag != 0
-                || self.logical_block_application_tag_mask != 0)
+        if !matches!(
+            mode,
+            WriteCheckMode::Write6 | WriteCheckMode::WithExpectedTags
+        ) && (self.expected_initial_logical_block_reference_tag != 0
+            || self.expected_logical_block_application_tag != 0
+            || self.logical_block_application_tag_mask != 0)
         {
             return Err(crate::Error::BadArgument(
                 "expected tags and mask are not allowed here".to_owned(),
@@ -182,8 +226,35 @@ impl<'a> WriteCommand<'a> {
         Ok(())
     }
 
+    fn data_transfer_length(&self) -> usize {
+        self.data_buffer.len() / self.logical_block_size as usize
+    }
+
+    pub fn issue_6(&mut self) -> crate::Result<()> {
+        self.error_check(0, 21, 8, WriteCheckMode::Write6)?;
+
+        let transfer_length = self.data_transfer_length();
+        let encoded_transfer_length = if transfer_length == 256 {
+            0
+        } else {
+            transfer_length as u8
+        };
+
+        let command_buffer = CommandBuffer6::new()
+            .with_operation_code(OPERATION_CODE_6)
+            .with_logical_block_address(self.logical_block_address as u32)
+            .with_transfer_length(encoded_transfer_length)
+            .with_control(self.control);
+
+        self.interface.issue(&ThisCommand {
+            command_buffer,
+            data_buffer: self.data_buffer.clone().into(),
+            timeout: self.timeout,
+        })
+    }
+
     pub fn issue_10(&mut self) -> crate::Result<()> {
-        self.error_check(5, 32, 16, false, false)?;
+        self.error_check(5, 32, 16, WriteCheckMode::Standard)?;
 
         let command_buffer = CommandBuffer10::new()
             .with_operation_code(OPERATION_CODE_10)
@@ -192,9 +263,7 @@ impl<'a> WriteCommand<'a> {
             .with_force_unit_access(self.force_unit_access.into())
             .with_logical_block_address(self.logical_block_address as u32)
             .with_group_number(self.group_number)
-            .with_transfer_length(
-                (self.data_buffer.len() / self.logical_block_size as usize) as u16,
-            )
+            .with_transfer_length(self.data_transfer_length() as u16)
             .with_control(self.control);
 
         self.interface.issue(&ThisCommand {
@@ -205,7 +274,7 @@ impl<'a> WriteCommand<'a> {
     }
 
     pub fn issue_12(&mut self) -> crate::Result<()> {
-        self.error_check(5, 32, 32, false, false)?;
+        self.error_check(5, 32, 32, WriteCheckMode::Standard)?;
 
         let command_buffer = CommandBuffer12::new()
             .with_operation_code(OPERATION_CODE_12)
@@ -213,9 +282,7 @@ impl<'a> WriteCommand<'a> {
             .with_disable_page_out(self.disable_page_out.into())
             .with_force_unit_access(self.force_unit_access.into())
             .with_logical_block_address(self.logical_block_address as u32)
-            .with_transfer_length(
-                (self.data_buffer.len() / self.logical_block_size as usize) as u32,
-            )
+            .with_transfer_length(self.data_transfer_length() as u32)
             .with_group_number(self.group_number)
             .with_control(self.control);
 
@@ -227,7 +294,7 @@ impl<'a> WriteCommand<'a> {
     }
 
     pub fn issue_16(&mut self) -> crate::Result<()> {
-        self.error_check(6, 64, 32, true, false)?;
+        self.error_check(6, 64, 32, WriteCheckMode::WithDld)?;
 
         let command_buffer = CommandBuffer16::new()
             .with_operation_code(OPERATION_CODE_16)
@@ -235,9 +302,7 @@ impl<'a> WriteCommand<'a> {
             .with_disable_page_out(self.disable_page_out.into())
             .with_force_unit_access(self.force_unit_access.into())
             .with_logical_block_address(self.logical_block_address)
-            .with_transfer_length(
-                (self.data_buffer.len() / self.logical_block_size as usize) as u32,
-            )
+            .with_transfer_length(self.data_transfer_length() as u32)
             .with_dld_0(self.dld_0.into())
             .with_dld_1(self.dld_1.into())
             .with_dld_2(self.dld_2.into())
@@ -252,7 +317,7 @@ impl<'a> WriteCommand<'a> {
     }
 
     pub fn issue_32(&mut self) -> crate::Result<()> {
-        self.error_check(5, 64, 32, false, true)?;
+        self.error_check(5, 64, 32, WriteCheckMode::WithExpectedTags)?;
 
         let command_buffer = CommandBuffer32::new()
             .with_operation_code(OPERATION_CODE_32)
@@ -271,9 +336,7 @@ impl<'a> WriteCommand<'a> {
                 self.expected_logical_block_application_tag,
             )
             .with_logical_block_application_tag_mask(self.logical_block_application_tag_mask)
-            .with_transfer_length(
-                (self.data_buffer.len() / self.logical_block_size as usize) as u32,
-            );
+            .with_transfer_length(self.data_transfer_length() as u32);
 
         self.interface.issue(&ThisCommand {
             command_buffer,
@@ -289,11 +352,22 @@ impl Scsi {
     }
 }
 
+const OPERATION_CODE_6: u8 = 0x0A;
 const OPERATION_CODE_10: u8 = 0x2A;
 const OPERATION_CODE_12: u8 = 0xAA;
 const OPERATION_CODE_16: u8 = 0x8A;
 const OPERATION_CODE_32: u8 = 0x7F;
 const SERVICE_ACTION_32: u16 = 0x000B;
+
+#[bitfield]
+#[derive(Clone, Copy)]
+struct CommandBuffer6 {
+    operation_code: B8,
+    reserved: B3,
+    logical_block_address: B21,
+    transfer_length: B8,
+    control: B8,
+}
 
 #[bitfield]
 #[derive(Clone, Copy)]
@@ -417,6 +491,7 @@ mod tests {
     use super::*;
     use std::mem::size_of;
 
+    const COMMAND_LENGTH_6: usize = 6;
     const COMMAND_LENGTH_10: usize = 10;
     const COMMAND_LENGTH_12: usize = 12;
     const COMMAND_LENGTH_16: usize = 16;
@@ -424,6 +499,12 @@ mod tests {
 
     #[test]
     fn layout_test() {
+        assert_eq!(
+            size_of::<CommandBuffer6>(),
+            COMMAND_LENGTH_6,
+            concat!("Size of: ", stringify!(CommandBuffer6))
+        );
+
         assert_eq!(
             size_of::<CommandBuffer10>(),
             COMMAND_LENGTH_10,
