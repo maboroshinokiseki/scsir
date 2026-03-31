@@ -1,6 +1,8 @@
 pub mod ata;
 pub mod background_control;
 pub mod change_definition;
+pub mod close_zone;
+pub mod finish_zone;
 pub mod format_unit;
 pub mod get_lba_status;
 pub mod get_stream_status;
@@ -18,6 +20,7 @@ pub mod read_defect_data;
 pub mod read_long;
 pub mod reassign_blocks;
 pub mod receive_diagnostic_results;
+pub mod report_zones;
 pub mod report_identifying_information;
 pub mod report_luns;
 pub mod report_supported_operation_codes;
@@ -31,6 +34,7 @@ pub mod security_protocol_out;
 pub mod seek;
 pub mod send_diagnostic;
 pub mod sense;
+pub mod reset_write_pointer;
 pub mod set_identifying_information;
 pub mod set_timestamp;
 pub mod shortcut;
@@ -47,6 +51,7 @@ pub mod write_buffer;
 pub mod write_long;
 pub mod write_same;
 pub mod write_stream;
+pub mod open_zone;
 
 use std::{borrow::BorrowMut, mem::size_of, time::Duration};
 
